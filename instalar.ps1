@@ -1,9 +1,9 @@
 # Version simple que sirve el relay en la raiz.
-# El relay reemplaza https://shelf-lending-ask-joshua.trycloudflare.com por su direccion al servir este archivo.
+# El relay reemplaza __RELAY__ por su direccion al servir este archivo.
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$RelayPorDefecto = 'https://shelf-lending-ask-joshua.trycloudflare.com'
+$RelayPorDefecto = '__RELAY__'
 
 function Titulo {
   Write-Host ''
@@ -35,6 +35,13 @@ Write-Host 'Si NO tienes codigo, presiona solo Enter: esta PC generara uno'
 Write-Host 'para que se lo envies a quien te esta ayudando.'
 Write-Host ''
 $Codigo = (Read-Host 'Codigo (o Enter para generar)').Trim()
+
+if (-not $RelayPorDefecto.StartsWith('http')) {
+  try {
+    $RelayPorDefecto = [string](Invoke-RestMethod -TimeoutSec 15 -Uri 'https://raw.githubusercontent.com/Herly123/conre/main/relay.txt')
+    $RelayPorDefecto = $RelayPorDefecto.Trim()
+  } catch { }
+}
 
 if (-not $RelayPorDefecto.StartsWith('http')) {
   Write-Host 'No hay servidor configurado en este instalador.'
