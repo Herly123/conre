@@ -122,6 +122,15 @@ function Save-Cfg($cfg) {
   [IO.File]::WriteAllText($CfgPath, $json, $utf8)
 }
 
+function Detener-Agente {
+  try { schtasks /End /TN 'Conexion Remota' 2>$null | Out-Null } catch { }
+  try {
+    Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -OperationTimeoutSec 8 |
+      Where-Object { $_.CommandLine -and $_.CommandLine -like '*conexion-remota*' -and $_.ProcessId -ne $PID } |
+      ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  } catch { }
+}
+
 function Iniciar-Tarea {
   $tr = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\ProgramData\conexion-remota\agente.ps1'
   schtasks /Create /F /TN 'Conexion Remota' /SC MINUTE /MO 1 /RU SYSTEM /RL HIGHEST /TR $tr | Out-Null
@@ -172,6 +181,7 @@ function Install-Agente {
   Save-Cfg $cfg
   icacls $CfgPath /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
   Write-Cortar
+  Detener-Agente
   Iniciar-Tarea
   Add-Log ('instalado ' + $env:COMPUTERNAME + ' ' + $reg.id)
   Write-Host ''
@@ -199,6 +209,7 @@ function Install-Solicitar {
   Save-Cfg $cfg
   icacls $CfgPath /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
   Write-Cortar
+  Detener-Agente
   Iniciar-Tarea
   Add-Log ('solicitud ' + $env:COMPUTERNAME + ' ' + $reg.codigo)
   Write-Host ''
