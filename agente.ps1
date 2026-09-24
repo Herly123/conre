@@ -245,21 +245,12 @@ function Recortar([string]$s) {
 
 function Invoke-Remoto([string]$cmd, [int]$timeout) {
   $cwd = Get-Cwd
-  $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($cmd))
-  $safe = $cwd.Replace("'", "''")
-  $wrapper = @"
-Set-Location -LiteralPath '$safe'
-`$__cmd = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('$b64'))
-`$global:__out = Invoke-Expression `$__cmd | Out-String
-`$global:__ok = `$?
-`$global:__cwd = (Get-Location).Path
-`$global:__out
-"@
   $ps = [powershell]::Create()
   $rs = [runspacefactory]::CreateRunspace()
   $rs.Open()
   $ps.Runspace = $rs
-  [void]$ps.AddScript($wrapper)
+  try { $rs.SessionStateProxy.Path.SetLocation($cwd) } catch { }
+  [void]$ps.AddScript($cmd)
   $h = $ps.BeginInvoke()
   if (-not $h.AsyncWaitHandle.WaitOne($timeout * 1000)) {
     $ps.Stop()
@@ -272,9 +263,7 @@ Set-Location -LiteralPath '$safe'
   try {
     $col = $ps.EndInvoke($h)
     $out = ($col | Out-String)
-    $okv = $rs.SessionStateProxy.GetVariable('__ok')
-    if ($null -ne $okv) { $ok = [bool]$okv }
-    $nc = $rs.SessionStateProxy.GetVariable('__cwd')
+    $nc = $rs.SessionStateProxy.Path.CurrentLocation.Path
     if ($nc) { Set-Cwd ([string]$nc) }
   } catch {
     $ok = $false
@@ -283,7 +272,10 @@ Set-Location -LiteralPath '$safe'
   $errs = @($ps.Streams.Error | ForEach-Object { $_.ToString() })
   $ps.Dispose()
   $rs.Close()
-  if ($errs.Count) { $out = ($out + "`n" + ($errs -join "`n")) }
+  if ($errs.Count) {
+    $out = ($out + "`n" + ($errs -join "`n"))
+    $ok = $false
+  }
   return @{ ok = [bool]$ok; salida = (Recortar $out); codigo = $(if ($ok) { 0 } else { 1 }) }
 }
 

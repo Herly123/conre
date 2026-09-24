@@ -21,19 +21,27 @@ function Traer-Agente([string]$relay) {
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
   Write-Host 'Preparando el agente...'
   $destino = $dir + '\agente.ps1'
+  Remove-Item -LiteralPath $destino -Force -ErrorAction SilentlyContinue
   $fuentes = @(
     'https://raw.githubusercontent.com/Herly123/conre/main/agente.ps1',
     ($relay.TrimEnd('/') + '/agente.ps1')
   )
   $bajado = $false
+  $detalle = ''
   foreach ($u in $fuentes) {
     try {
       Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile $destino
       $bajado = $true
       break
-    } catch { }
+    } catch { $detalle = $_.Exception.Message }
   }
-  if (-not $bajado) { throw 'No se pudo descargar el agente. Revisa la conexion a internet.' }
+  if (-not $bajado) {
+    try {
+      & curl.exe -sL -o $destino $fuentes[0]
+      if ((Test-Path -LiteralPath $destino) -and ((Get-Item -LiteralPath $destino).Length -gt 1000)) { $bajado = $true }
+    } catch { $detalle = $detalle + ' | curl: ' + $_.Exception.Message }
+  }
+  if (-not $bajado) { throw ('No se pudo descargar el agente. Detalle: ' + $detalle) }
   return $destino
 }
 
