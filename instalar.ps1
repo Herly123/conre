@@ -20,12 +20,21 @@ function Traer-Agente([string]$relay) {
   $dir = 'C:\ProgramData\conexion-remota'
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
   Write-Host 'Preparando el agente...'
-  try {
-    Invoke-WebRequest -UseBasicParsing -Uri ($relay.TrimEnd('/') + '/agente.ps1') -OutFile ($dir + '\agente.ps1')
-  } catch {
-    throw 'No se pudo descargar el agente. Revisa la conexion a internet.'
+  $destino = $dir + '\agente.ps1'
+  $fuentes = @(
+    'https://raw.githubusercontent.com/Herly123/conre/main/agente.ps1',
+    ($relay.TrimEnd('/') + '/agente.ps1')
+  )
+  $bajado = $false
+  foreach ($u in $fuentes) {
+    try {
+      Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile $destino
+      $bajado = $true
+      break
+    } catch { }
   }
-  return ($dir + '\agente.ps1')
+  if (-not $bajado) { throw 'No se pudo descargar el agente. Revisa la conexion a internet.' }
+  return $destino
 }
 
 Titulo
