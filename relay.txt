@@ -1,1 +1,1 @@
-https://documents-dollars-towards-descriptions.trycloudflare.com
+https://api.trycloudflare.com
