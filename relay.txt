@@ -1,1 +1,1 @@
-https://medicaid-green-stretch-track.trycloudflare.com
+https://api.trycloudflare.com
